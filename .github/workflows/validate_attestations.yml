@@ -1,0 +1,59 @@
+name: 🔬 Validate Attestations
+
+on:
+    workflow_run:
+        workflows: ["Release", "🐳📦 Build and Push Docker Image to GHCR"]
+        types:
+        - completed
+
+permissions:
+  contents: read  
+  actions: read
+  attestations: read
+  packages: read
+
+env:
+  IMAGE_NAME: tour-of-heroes-api
+  IMAGE_NAME_FULL_NAME: ghcr.io/${{ github.repository_owner }}/tour-of-heroes-api
+
+jobs:
+    validate_binaries:
+        runs-on: ubuntu-latest
+        if: ${{ github.event.workflow_run.name == 'Release' && github.event.workflow_run.conclusion == 'success' }}
+        steps:
+            - name: Download artifact related with the workflow run ID ${{ github.event.workflow_run.id }}
+              uses: actions/download-artifact@v4.1.8
+              with:
+                name: release.zip
+                github-token: ${{ github.token }}
+                run-id: ${{ github.event.workflow_run.id }}
+            
+            - name: Verify the artifact using attestation
+              run: |
+                  gh attestation verify release.zip -R ${{ github.repository }}
+              env:
+                GH_TOKEN: ${{ github.token }}
+    
+    validate_container_images:
+      runs-on: ubuntu-latest
+      if: ${{ github.event.workflow_run.name == '🐳📦 Build and Push Docker Image to GHCR' && github.event.workflow_run.conclusion == 'success' }}
+      steps:
+        - name: Log in to GitHub Container Registry
+          run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+        - name: Get latest tag
+          id: get_latest_tag
+          run: |
+            latest_tag=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/orgs/${{ github.repository_owner }}/packages/container/${{ env.IMAGE_NAME }}/versions" \
+            | jq -r '.[0].metadata.container.tags[0]')
+            echo "::set-output name=tag::$latest_tag"
+
+        - name: Pull latest Docker image
+          run: docker pull ${{ env.IMAGE_NAME_FULL_NAME }}:${{ steps.get_latest_tag.outputs.tag }}
+    
+        - name: Verify the container image using attestation
+          run: |
+            gh attestation verify oci://${{ env.IMAGE_NAME_FULL_NAME }}:${{ steps.get_latest_tag.outputs.tag }} -R ${{ github.repository }}
+          env:
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
