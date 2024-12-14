@@ -1,37 +1,74 @@
-name: Generate release with attestation 🚀
-
+name: Release
 on:
   push:
-    tags:
-      - 'v*'  # Este flujo de trabajo se ejecutará para cualquier etiqueta que comience con 'v'
+    branches:
+      - main
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
 
 jobs:
-  create_release:
-    runs-on: ubuntu-latest
-
+  generate_tag_and_release:
+    runs-on: ubuntu-latest    
     steps:
-    - name: Get the code 📚
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Generate a release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: ${{ github.ref }}
-        body: |
-          Release automática para la etiqueta ${{ github.ref }}
-        draft: false
-        prerelease: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-    - name: Subir activos a la release
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./path/to/your/asset
-        asset_name: nombre_del_activo
-        asset_content_type: tipo_de_contenido
+      - name: Restore dependencies
+        run: dotnet restore
+      
+      - name: Build
+        run: dotnet build --configuration Release
+
+      - name: Publish
+        run: dotnet publish --configuration Release --output publish
+
+      - name: Zip
+        run: zip -r release.zip publish
+
+      - name: Attach artifact
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: release.zip
+          path: release.zip
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: 'release.zip'
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v3.1.1
+        with:
+          versionSpec: '6.0.x'
+
+      - name: Determine Version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v3.1.1
+
+      - name: Config bot for Git
+        run: |
+          git config --global user.email "releaser-bot@returngis.net"
+          git config --global user.name "Releaser Bot"
+
+      - name: Create tag
+        if: success()
+        run: git tag -a v${{ steps.gitversion.outputs.fullSemVer }} -m "Release ${{ steps.gitversion.outputs.fullSemVer }}"
+
+      - name: Push tag
+        if: success()
+        run: git push origin v${{ steps.gitversion.outputs.fullSemVer }}
+
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "release.zip"
+          tag: "v${{ steps.gitversion.outputs.fullSemVer }}"
