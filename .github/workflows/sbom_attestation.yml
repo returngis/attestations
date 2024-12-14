@@ -1,0 +1,105 @@
+name: 🐳🪪 Container Image SBOM attestation
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'tag to apply to image'
+        type: string
+        required: false
+        default: sbom-demo    
+
+
+jobs:
+  build-publish:
+    runs-on: ubuntu-22.04
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      packages: write
+    env:      
+      REGISTRY: "ghcr.io"
+      IMAGE_NAME: ${{ github.repository }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5.5.1
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          labels: |
+            org.opencontainers.image.description=hi
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}            
+          tags: |
+            type=raw,value=${{ inputs.image_tag }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        uses: docker/build-push-action@v5
+        id: build
+        with:          
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          context: .
+          platforms: linux/amd64
+          provenance: false
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          artifact-name: ${{ inputs.image_tag }}.sbom.spdx.json
+          format: spdx-json
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}
+          output-file: ${{ inputs.image_tag }}.sbom.spdx.json
+          upload-artifact: true
+          upload-release-assets: false
+
+      - name: Upload SBOM attestation
+        uses: actions/attest-sbom@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: ${{ inputs.image_tag }}.sbom.spdx.json
+          push-to-registry: true
+  validate:
+    needs: [build-publish]
+    runs-on: ubuntu-22.04
+    permissions:
+      attestations: read
+      contents: read      
+      packages: read
+    env:      
+      REGISTRY: "ghcr.io"
+      IMAGE_NAME: ${{ github.repository }}
+    steps:
+      - name: Log in to the registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull the new image
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.image_tag }}
+          
+      - name: Validate attestations
+        run: |
+          gh attestation verify oci://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.image_tag }} -R ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
