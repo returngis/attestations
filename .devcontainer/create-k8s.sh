@@ -1,12 +1,14 @@
 # Load the environment variables
 source .devcontainer/.env
 
+# Delete in case it already exists
+kind delete cluster --name k8s-attestations-demo
+
 # Create kind cluster
 kind create cluster --name k8s-attestations-demo
 
-
-# You can also verify these releases
-gh attestation verify --owner github oci://ghcr.io/github/artifact-attestations-helm-charts/policy-controller:v0.10.0-github9
+# If you close the dev container at some point you need to get the context again
+kubectl cluster-info --context k8s-attestations-demo
 
 # Install the Helm chart that deploys the Sigstore Policy Controller
 helm upgrade policy-controller --install --atomic \
@@ -25,7 +27,19 @@ helm upgrade trust-policies --install --atomic \
  --set policy.enabled=true \
  --set policy.organization=$ORG_NAME
 
+
+# helm upgrade trust-policies --install --atomic \
+#  --namespace artifact-attestations \
+#  oci://ghcr.io/github/artifact-attestations-helm-charts/trust-policies \
+#  --version v0.6.2 \
+#  --set policy.enabled=true \
+#  --set policy.organization=$ORG_NAME \
+#  --set-json 'policy.exemptImages=["index.docker.io/library/busybox**"]' \
+#  --set-json 'policy.images=["ghcr.io/returngis/**"]'
+
 kubectl get all -n artifact-attestations
+
+kubectl describe clusterimagepolicy.policy.sigstore.dev/github-policy
 
 # Deploy a deployment with NGINX
 kubectl create deployment nginx --image=nginx --replicas=3
@@ -37,7 +51,7 @@ kubectl delete deployment nginx
 
 # Now enforce the policy
 # Each namespace in your cluster can independently enforce policies. To enable enforcement in a namespace you need to add a label to the namespace.
-kubectl label namespace default policy.sigstore.dev/include=false --overwrite
+kubectl label namespace default policy.sigstore.dev/include=true --overwrite
 
 kubectl describe namespace default
 
@@ -49,6 +63,11 @@ kubectl create secret docker-registry ghcr-secret \
   --docker-server=ghcr.io \
   --docker-username=$GITHUB_USER_NAME \
   --docker-password=$GITHUB_PAT
+
+gh auth login
+
+gh attestation verify oci://ghcr.io/returngis/tour-of-heroes-api@sha256:9e0d8c72c66561da8feeffaa37cb651da1a75e79a7244a9963d6f6273772e2c8 --owner returngis
+
 
 # Apply the deployment inline
 kubectl apply -f - <<EOF
@@ -68,9 +87,7 @@ spec:
     spec:
       containers:
       - name: tour-of-heroes-api
-        image: ghcr.io/returngis/tour-of-heroes-api:05b6d10
-      imagePullSecrets:
-      - name: ghcr-secret
+        image: ghcr.io/returngis/tour-of-heroes-api@sha256:9e0d8c72c66561da8feeffaa37cb651da1a75e79a7244a9963d6f6273772e2c8
 EOF
 
 kubectl get pods
