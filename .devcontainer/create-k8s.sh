@@ -4,6 +4,10 @@ source .devcontainer/.env
 # Create kind cluster
 kind create cluster --name k8s-attestations-demo
 
+
+# You can also verify these releases
+gh attestation verify --owner github oci://ghcr.io/github/artifact-attestations-helm-charts/policy-controller:v0.10.0-github9
+
 # Install the Helm chart that deploys the Sigstore Policy Controller
 helm upgrade policy-controller --install --atomic \
   --create-namespace --namespace artifact-attestations \
@@ -33,13 +37,12 @@ kubectl delete deployment nginx
 
 # Now enforce the policy
 # Each namespace in your cluster can independently enforce policies. To enable enforcement in a namespace you need to add a label to the namespace.
-kubectl label namespace default policy.sigstore.dev/include=true
+kubectl label namespace default policy.sigstore.dev/include=false --overwrite
+
+kubectl describe namespace default
 
 # Now, if you try to deploy the NGINX deployment again, it will be blocked by the policy controller.
 kubectl create deployment nginx --image=nginx --replicas=3
-
-# Add PAT for GitHub
-# ...existing code...
 
 # Add PAT for GitHub
 kubectl create secret docker-registry ghcr-secret \
@@ -65,7 +68,14 @@ spec:
     spec:
       containers:
       - name: tour-of-heroes-api
-        image: ghcr.io/returngis/tour-of-heroes-api:7b11ef9
+        image: ghcr.io/returngis/tour-of-heroes-api:05b6d10
       imagePullSecrets:
       - name: ghcr-secret
 EOF
+
+kubectl get pods
+
+# If you encounter errors, you can check the logs of the policy controller to see why the deployment was blocked.
+kubectl get pods -n artifact-attestations
+
+kubectl logs policy-controller-webhook-5dff667847-qm8qs -n artifact-attestations
