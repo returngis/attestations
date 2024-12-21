@@ -7,15 +7,11 @@ kind delete cluster --name k8s-attestations-demo
 # Create kind cluster
 kind create cluster --name k8s-attestations-demo
 
-# If you close the dev container at some point you need to get the context again
-kubectl cluster-info --context k8s-attestations-demo
-
 # Install the Helm chart that deploys the Sigstore Policy Controller
 helm upgrade policy-controller --install --atomic \
   --create-namespace --namespace artifact-attestations \
   oci://ghcr.io/github/artifact-attestations-helm-charts/policy-controller \
   --version v0.10.0-github9
-
 
 kubectl get all -n artifact-attestations
 
@@ -44,7 +40,7 @@ kubectl describe clusterimagepolicy.policy.sigstore.dev/github-policy
 # Deploy a deployment with NGINX
 kubectl create deployment nginx --image=nginx --replicas=3
 
-kubectl get pods
+kubectl get pods -w
 
 # Delete the deployment
 kubectl delete deployment nginx
@@ -66,7 +62,7 @@ kubectl create secret docker-registry ghcr-secret \
 
 gh auth login
 
-gh attestation verify oci://ghcr.io/returngis/tour-of-heroes-api@sha256:9e0d8c72c66561da8feeffaa37cb651da1a75e79a7244a9963d6f6273772e2c8 --owner returngis
+gh attestation verify oci://ghcr.io/returngis/tour-of-heroes-api:84c22fd --owner returngis
 
 
 # Apply the deployment inline
@@ -87,7 +83,7 @@ spec:
     spec:
       containers:
       - name: tour-of-heroes-api
-        image: ghcr.io/returngis/tour-of-heroes-api@sha256:9e0d8c72c66561da8feeffaa37cb651da1a75e79a7244a9963d6f6273772e2c8
+        image: ghcr.io/returngis/tour-of-heroes-api:84c22fd
 EOF
 
 kubectl get pods
