@@ -47,13 +47,13 @@ jobs:
           subject-path: 'release.zip'
 
       - name: Install GitVersion
-        uses: gittools/actions/gitversion/setup@v3.1.1
+        uses: gittools/actions/gitversion/setup@v3.1.11
         with:
           versionSpec: '6.0.x'
 
       - name: Determine Version
         id: gitversion
-        uses: gittools/actions/gitversion/execute@v3.1.1
+        uses: gittools/actions/gitversion/execute@v3.1.11
 
       - name: Config bot for Git
         run: |
