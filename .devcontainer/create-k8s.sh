@@ -11,7 +11,7 @@ kind create cluster --name k8s-attestations-demo
 helm upgrade policy-controller --install --atomic \
   --create-namespace --namespace artifact-attestations \
   oci://ghcr.io/github/artifact-attestations-helm-charts/policy-controller \
-  --version v0.10.0-github9
+  --version v0.12.0-github10
 
 kubectl get all -n artifact-attestations
 
@@ -62,7 +62,7 @@ kubectl create secret docker-registry ghcr-secret \
 
 gh auth login
 
-gh attestation verify oci://ghcr.io/returngis/tour-of-heroes-api:84c22fd --owner returngis
+gh attestation verify oci://ghcr.io/returngis/tour-of-heroes-api:962cb07 --owner returngis
 
 
 # Apply the deployment inline
@@ -83,12 +83,12 @@ spec:
     spec:
       containers:
       - name: tour-of-heroes-api
-        image: ghcr.io/returngis/tour-of-heroes-api:84c22fd
+        image: ghcr.io/returngis/tour-of-heroes-api:962cb07
 EOF
 
-kubectl get pods
+kubectl get pods -w
 
 # If you encounter errors, you can check the logs of the policy controller to see why the deployment was blocked.
 kubectl get pods -n artifact-attestations
 
-kubectl logs policy-controller-webhook-5dff667847-qm8qs -n artifact-attestations
+kubectl logs $(kubectl get deployment tour-of-heroes-api) -n artifact-attestations
