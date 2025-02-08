@@ -2,7 +2,7 @@ name: 🔬 Validate Attestations
 
 on:
     workflow_run:
-        workflows: ["Release", "🐳📦 Build and Push Docker Image to GHCR"]
+        workflows: ["📦 Release", "🐳📦 Build and Push Docker Image to GHCR"]
         types:
         - completed
 
@@ -19,7 +19,7 @@ env:
 jobs:
     validate_binaries:
         runs-on: ubuntu-latest
-        if: ${{ github.event.workflow_run.name == 'Release' && github.event.workflow_run.conclusion == 'success' }}
+        if: ${{ github.event.workflow_run.name == '📦 Release' && github.event.workflow_run.conclusion == 'success' }}
         steps:
             - name: Download artifact related with the workflow run ID ${{ github.event.workflow_run.id }}
               uses: actions/download-artifact@v4.1.8
@@ -46,7 +46,7 @@ jobs:
           run: |
             latest_tag=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/orgs/${{ github.repository_owner }}/packages/container/${{ env.IMAGE_NAME }}/versions" \
-            | jq -r '.[1].metadata.container.tags[0]')
+            | jq -r '.[0].metadata.container.tags[1]')
             echo "::set-output name=tag::$latest_tag"
 
         - name: Pull latest Docker image
