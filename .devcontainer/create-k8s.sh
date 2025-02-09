@@ -91,4 +91,4 @@ kubectl get pods -w
 # If you encounter errors, you can check the logs of the policy controller to see why the deployment was blocked.
 kubectl get pods -n artifact-attestations
 
-kubectl logs $(kubectl get deployment tour-of-heroes-api) -n artifact-attestations
+kubectl logs $(kubectl get pods  -n artifact-attestations -o jsonpath='{.items[*].metadata.name}') -n artifact-attestations
