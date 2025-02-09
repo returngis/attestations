@@ -46,8 +46,8 @@ jobs:
           run: |
             latest_tag=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/orgs/${{ github.repository_owner }}/packages/container/${{ env.IMAGE_NAME }}/versions" \
-            | jq -r '.[2].metadata.container.tags[0]')
-            echo "::set-output name=tag::$latest_tag"
+            | jq -r '.[2].metadata.container.tags[0]')            
+            echo tag=$latest_tag >> $GITHUB_OUTPUT
 
         - name: Pull latest Docker image
           run: docker pull ${{ env.IMAGE_NAME_FULL_NAME }}:${{ steps.get_latest_tag.outputs.tag }}
